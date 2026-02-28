@@ -8,8 +8,11 @@ export default {
       const match = currentDoH.match(/:\/\/([^/]+)/);
       if (match) currentDoH = match[1];
     }
-    currentDohPath = env.PATH || env.TOKEN || currentDohPath;
+    // Strict separation: PATH is for routing, TOKEN is for auth.
+    currentDohPath = env.PATH || currentDohPath;
     if (currentDohPath.includes('/')) currentDohPath = currentDohPath.split('/')[1];
+
+    const secureToken = env.TOKEN || null;
 
     const url = new URL(request.url);
     const path = url.pathname;
@@ -27,6 +30,37 @@ export default {
     }
 
     const isBrowserDirect = request.method === 'GET' && !url.search && (request.headers.get('Accept') || '').includes('text/html');
+
+    // Global Strict Access Control
+    if (secureToken) {
+      const urlToken = url.searchParams.get('token');
+      const cookieHeader = request.headers.get('Cookie') || '';
+      const hasCookie = cookieHeader.includes(`auth_token=${secureToken}`);
+      const authHeader = request.headers.get('Authorization') || '';
+      const hasAuthHeader = authHeader === `Bearer ${secureToken}` || authHeader === secureToken;
+
+      const isAuthorized = (urlToken === secureToken) || hasCookie || hasAuthHeader;
+
+      if (!isAuthorized) {
+        return new Response('401 Unauthorized: Invalid or missing token', {
+          status: 401,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+      }
+
+      if (urlToken === secureToken && isBrowserDirect && path === '/') {
+        // Return redirect with cookie to clean up the URL
+        const redirectUrl = new URL(url);
+        redirectUrl.searchParams.delete('token');
+        return new Response(null, {
+          status: 302,
+          headers: {
+            'Location': redirectUrl.toString() || '/',
+            'Set-Cookie': `auth_token=${secureToken}; Path=/; HttpOnly; Max-Age=2592000; SameSite=Strict`
+          }
+        });
+      }
+    }
 
     // DoH endpoint
     if (path === `/${currentDohPath}` && !isBrowserDirect) {
@@ -48,9 +82,9 @@ export default {
       return handleIpInfo(request, env, url);
     }
 
-    // DNS query via query params (web UI)
+    // DNS query via query params (web UI backend logic)
     if (url.searchParams.has('doh')) {
-      return handleWebDnsQuery(url, currentDoH, currentDohPath);
+      return handleWebDnsQuery(request, url, currentDoH, currentDohPath);
     }
 
     if (env.URL302) return Response.redirect(env.URL302, 302);
@@ -60,20 +94,14 @@ export default {
       }
       return proxyUrl(env.URL, url);
     }
-    return new Response(renderHtml(currentDoH, currentDohPath), { headers: { 'content-type': 'text/html;charset=UTF-8' } });
+
+    return new Response(renderHtml(currentDoH, currentDohPath, secureToken), { headers: { 'content-type': 'text/html;charset=UTF-8' } });
   }
 };
 
 // ─── IP Info Handler ───────────────────────────────────────────────
 function handleIpInfo(request, env, url) {
   const CORS_JSON = { 'content-type': 'application/json;charset=UTF-8', 'Access-Control-Allow-Origin': '*' };
-
-  if (env.TOKEN) {
-    const token = url.searchParams.get('token');
-    if (token !== env.TOKEN) {
-      return new Response(JSON.stringify({ status: 'error', message: 'Token不正确', code: 'AUTH_FAILED' }), { status: 403, headers: CORS_JSON });
-    }
-  }
 
   const ip = url.searchParams.get('ip') || request.headers.get('CF-Connecting-IP');
   if (!ip) {
@@ -141,11 +169,12 @@ function combineDnsResults(ipv4Result, ipv6Result, nsResult) {
 }
 
 // ─── Web UI DNS Query Handler ─────────────────────────────────────
-async function handleWebDnsQuery(url, defaultDoH, defaultPath) {
+async function handleWebDnsQuery(request, url, defaultDoH, defaultPath) {
+  const JSON_HDR = { 'content-type': 'application/json;charset=UTF-8', 'Access-Control-Allow-Origin': '*' };
+
   const domain = url.searchParams.get('domain') || url.searchParams.get('name') || 'www.google.com';
   const doh = url.searchParams.get('doh') || `https://${defaultDoH}/dns-query`;
   const type = url.searchParams.get('type') || 'all';
-  const JSON_HDR = { 'content-type': 'application/json;charset=UTF-8', 'Access-Control-Allow-Origin': '*' };
 
   // Determine upstream DoH
   let upstream = doh;
@@ -241,7 +270,7 @@ async function handleDohRequest(request, targetDoh, defaultDoH) {
 }
 
 // ─── HTML Page ─────────────────────────────────────────────────────
-function renderHtml(currentDoH, currentDohPath) {
+function renderHtml(currentDoH, currentDohPath, secureToken) {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -252,8 +281,7 @@ function renderHtml(currentDoH, currentDohPath) {
 <link rel="icon" href="https://cf-assets.www.cloudflare.com/dzlvafdwdttg/6TaQ8Q7BDmdAFRoHpDCb82/8d9bc52a2ac5af100de3a9adcf99ffaa/security-shield-protection-2.svg" type="image/x-icon">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-body { font-family: 'Inter', system-ui, -apple-system, sans-serif; min-height: 100vh; margin: 0; padding: 40px 20px; color: #fff; background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%); background-size: 200% 200%; animation: gradientBG 15s ease infinite; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }
-@keyframes gradientBG { 0% { background-position: 0% 50% } 50% { background-position: 100% 50% } 100% { background-position: 0% 50% } }
+body { font-family: 'Inter', system-ui, -apple-system, sans-serif; min-height: 100vh; margin: 0; padding: 40px 20px; color: #fff; background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%); display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }
 .container { width: 100%; max-width: 850px; background: rgba(255, 255, 255, 0.03); border-radius: 24px; box-shadow: 0 30px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1); padding: 40px; backdrop-filter: blur(20px) saturate(150%); -webkit-backdrop-filter: blur(20px) saturate(150%); border: 1px solid rgba(255, 255, 255, 0.08); }
 h1 { background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; text-align: center; margin-bottom: 30px; font-size: 2.2rem; letter-spacing: -0.5px; }
 .hero-section { text-align: center; margin-bottom: 40px; }
@@ -327,6 +355,8 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 .github-corner:hover .octo-arm { animation: octocat-wave 560ms ease-in-out; }
 @keyframes octocat-wave { 0%, 100% { transform: rotate(0); } 20%, 60% { transform: rotate(-25deg); } 40%, 80% { transform: rotate(10deg); } }
 @media (max-width: 576px) { .container { padding: 20px; border-radius: 16px; } .github-corner:hover .octo-arm { animation: none; } .github-corner .octo-arm { animation: octocat-wave 560ms ease-in-out; } }
+.toast-msg { visibility: hidden; min-width: 200px; background-color: rgba(30, 41, 59, 0.9); backdrop-filter: blur(10px); color: #fff; text-align: center; border-radius: 8px; padding: 12px 24px; position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 15px; border: 1px solid rgba(56, 189, 248, 0.4); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4); transition: opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); opacity: 0; }
+.toast-msg.show { visibility: visible; bottom: 50px; opacity: 1; }
 </style>
 </head>
 <body>
@@ -387,14 +417,16 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 <div id="errorContainer" style="display:none;"><pre id="errorMessage" class="error-message"></pre></div>
 </div>
 <div class="beian-info">
-<p><strong>DNS-over-HTTPS：<span id="dohUrlDisplay" class="copy-link" title="点击复制">https://<span id="currentDomain">...</span>/${currentDohPath}</span></strong><br>基于 Cloudflare Workers 上游 <span id="upstreamDomainDisplay">${currentDoH}</span> 的 DoH (DNS over HTTPS) 解析服务</p>
+<p><strong>DNS-over-HTTPS：<span id="dohUrlDisplay" class="copy-link" title="点击复制">https://${currentDoH}/${currentDohPath}</span></strong><br>基于 Cloudflare Workers 上游 <span id="upstreamDomainDisplay">${currentDoH}</span> 的 DoH (DNS over HTTPS) 解析服务</p>
 </div>
 </div>
+<div id="toast" class="toast-msg"></div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 const currentHost=location.host,currentProtocol=location.protocol;
 const currentDohPath=${JSON.stringify(currentDohPath)};
 const currentDoH=${JSON.stringify(currentDoH)};
+const secureToken=${JSON.stringify(secureToken)};
 const currentDohUrl=currentProtocol+'//'+currentHost+'/'+currentDohPath;
 const defaultDnsDoh='https://' + currentDoH + '/' + currentDohPath;
 let activeDohUrl=currentDohUrl;
@@ -412,19 +444,34 @@ document.getElementById('clearBtn').addEventListener('click',()=>{const d=docume
 
 document.getElementById('copyBtn').addEventListener('click',function(){
   navigator.clipboard.writeText(document.getElementById('result').textContent).then(()=>{
+    showToast('✓ 全部记录已复制到剪贴板');
     const o=this.textContent;this.textContent='已复制';setTimeout(()=>{this.textContent=o},2000);
   }).catch(e=>console.error('Copy failed:',e));
 });
 
 function formatTTL(s){s=+s;if(s<60)return s+'秒';if(s<3600)return(s/60|0)+'分钟';if(s<86400)return(s/3600|0)+'小时';return(s/86400|0)+'天'}
 
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  if(t.timeoutId) clearTimeout(t.timeoutId);
+  t.timeoutId=setTimeout(()=>t.classList.remove('show'),2500);
+}
+
 async function queryIpGeoInfo(ip){
-  try{const r=await fetch(\`./ip-info?ip=\${ip}&token=\${currentDohPath}\`);if(!r.ok)throw new Error(r.status);return r.json()}
+  try{
+    const url = \`./ip-info?ip=\${ip}\` + (secureToken ? \`&token=\${encodeURIComponent(secureToken)}\` : '');
+    const r=await fetch(url);
+    if(!r.ok)throw new Error(r.status);
+    return r.json();
+  }
   catch(e){console.error('IP geo query failed:',e);return null}
 }
 
 function handleCopyClick(el,text){
-  navigator.clipboard.writeText(text).then(()=>{el.classList.add('copied');setTimeout(()=>el.classList.remove('copied'),2000)}).catch(e=>console.error('Copy failed:',e));
+  navigator.clipboard.writeText(text).then(()=>{
+    showToast('✓ 已复制 ' + text);
+    el.classList.add('copied');setTimeout(()=>el.classList.remove('copied'),2000)
+  }).catch(e=>console.error('Copy failed:',e));
 }
 
 function bindCopy(container){
@@ -513,7 +560,8 @@ document.getElementById('resolveForm').addEventListener('submit',async function(
   document.getElementById('errorContainer').style.display='none';
   document.getElementById('copyBtn').style.display='none';
   try{
-    const r=await fetch(\`?doh=\${encodeURIComponent(doh)}&domain=\${encodeURIComponent(domain)}&type=all\`);
+    const url = \`?doh=\${encodeURIComponent(doh)}&domain=\${encodeURIComponent(domain)}&type=all\` + (secureToken ? \`&token=\${encodeURIComponent(secureToken)}\` : '');
+    const r=await fetch(url);
     if(!r.ok)throw new Error('HTTP '+r.status);
     const json=await r.json();
     json.error?displayError(json.error):displayRecords(json);
@@ -550,11 +598,13 @@ document.addEventListener('DOMContentLoaded',function(){
   const lastDomain=localStorage.getItem('lastDomain');
   if(lastDomain)document.getElementById('domain').value=lastDomain;
   document.getElementById('domain').addEventListener('input',function(){localStorage.setItem('lastDomain',this.value)});
-  document.getElementById('currentDomain').textContent=currentHost;
 
   if(dohUrlDisplay){
     dohUrlDisplay.addEventListener('click',function(){
-      navigator.clipboard.writeText(workerFullUrl).then(()=>{dohUrlDisplay.classList.add('copied');setTimeout(()=>dohUrlDisplay.classList.remove('copied'),2000)}).catch(e=>console.error('Copy failed:',e));
+      navigator.clipboard.writeText(workerFullUrl).then(()=>{
+        showToast('✓ DoH 地址已复制');
+        dohUrlDisplay.classList.add('copied');setTimeout(()=>dohUrlDisplay.classList.remove('copied'),2000)
+      }).catch(e=>console.error('Copy failed:',e));
     });
   }
 
