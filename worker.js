@@ -118,22 +118,30 @@ function handleIpInfo(request, env, url) {
     .catch(err => new Response(JSON.stringify({ status: 'error', message: `IP查询失败: ${err.message}`, code: 'API_REQUEST_FAILED' }), { status: 500, headers: CORS_JSON }));
 }
 
-// ─── DNS Query (single type, JSON format) ──────────────────────────
+// ─── DNS Query (JSON API, /dns-query → /resolve fallback) ─────────
 async function queryDns(dohServer, domain, type) {
-  let endpoint = dohServer;
-  if (endpoint.endsWith('/dns-query')) {
-    endpoint = endpoint.slice(0, -10) + '/resolve';
-  } else if (!endpoint.endsWith('/resolve') && !endpoint.includes('?')) {
-    endpoint += endpoint.endsWith('/') ? 'resolve' : '/resolve';
-  }
+  // Strip any known suffix to get the base URL, then try both endpoints in order.
+  let base = dohServer;
+  if (base.endsWith('/dns-query')) base = base.slice(0, -10);
+  else if (base.endsWith('/resolve')) base = base.slice(0, -8);
+  if (base.endsWith('/')) base = base.slice(0, -1);
 
-  const response = await fetch(`${endpoint}?name=${encodeURIComponent(domain)}&type=${type}`, {
-    headers: { 'Accept': 'application/dns-json' }
-  });
+  const params = `?name=${encodeURIComponent(domain)}&type=${type}`;
+  const hdrs = { 'Accept': 'application/dns-json' };
 
+  // 1st attempt: /dns-query (Cloudflare, 360, etc.)
+  let response = await fetch(`${base}/dns-query${params}`, { headers: hdrs });
+
+  // Fallback: /resolve (Google, etc.) when /dns-query is unavailable
   if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`DoH error (${response.status}): ${errText.substring(0, 200)}`);
+    const fallback = await fetch(`${base}/resolve${params}`, { headers: hdrs });
+    if (fallback.ok) {
+      response = fallback;
+    } else {
+      // Both failed — report the first error (more informative for the primary endpoint)
+      const errText = await response.text();
+      throw new Error(`DoH error (${response.status}): ${errText.substring(0, 200)}`);
+    }
   }
 
   const ct = response.headers.get('content-type') || '';
