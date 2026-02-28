@@ -1,0 +1,16 @@
+name = "reserve-dns-worker"
+main = "worker.js"
+compatibility_date = "2026-02-28"
+
+[vars]
+# DoH 服务器配置
+DOH = "cloudflare-dns.com"
+# PATH = "dns-query"
+
+# 重定向或代理配置（可选，二选一）
+# URL302 = "https://example.com"
+# URL = "nginx"
+
+# 注意：TOKEN 应该使用 wrangler secret 命令设置，而不是直接写在配置文件中
+# 设置命令：wrangler secret put TOKEN
+# 然后输入你的 token 值
