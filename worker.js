@@ -37,15 +37,19 @@ export default {
 
     const isBrowserDirect = request.method === 'GET' && !url.search && (request.headers.get('Accept') || '').includes('text/html');
 
-    // Global Strict Access Control
+    // Global Strict Access Control (token as path segment: /{token}/...)
+    let strippedPath = path; // path after removing token prefix
     if (secureToken) {
-      const urlToken = url.searchParams.get('token');
       const cookieHeader = request.headers.get('Cookie') || '';
       const hasCookie = cookieHeader.includes(`auth_token=${secureToken}`);
       const authHeader = request.headers.get('Authorization') || '';
       const hasAuthHeader = authHeader === `Bearer ${secureToken}` || authHeader === secureToken;
 
-      const isAuthorized = (urlToken === secureToken) || hasCookie || hasAuthHeader;
+      // Check if path starts with /{token}
+      const tokenPrefix = `/${secureToken}`;
+      const hasPathToken = path === tokenPrefix || path.startsWith(tokenPrefix + '/');
+
+      const isAuthorized = hasPathToken || hasCookie || hasAuthHeader;
 
       if (!isAuthorized) {
         return new Response('401 Unauthorized: Invalid or missing token', {
@@ -54,35 +58,42 @@ export default {
         });
       }
 
-      if (urlToken === secureToken && isBrowserDirect && path === '/') {
-        // Return redirect with cookie to clean up the URL
-        const redirectUrl = new URL(url);
-        redirectUrl.searchParams.delete('token');
-        return new Response(null, {
-          status: 302,
-          headers: {
-            'Location': redirectUrl.toString() || '/',
-            'Set-Cookie': `auth_token=${secureToken}; Path=/; HttpOnly; Max-Age=2592000; SameSite=Strict`
-          }
-        });
+      if (hasPathToken) {
+        // Strip the token prefix from the path for downstream routing
+        strippedPath = path.slice(tokenPrefix.length) || '/';
+        if (!hasCookie) {
+          // Set cookie so browser UI works without repeating the token in path
+          const redirectUrl = new URL(url);
+          redirectUrl.pathname = strippedPath;
+          return new Response(null, {
+            status: 302,
+            headers: {
+              'Location': redirectUrl.toString(),
+              'Set-Cookie': `auth_token=${secureToken}; Path=/; HttpOnly; Max-Age=2592000; SameSite=Strict`
+            }
+          });
+        }
       }
     }
 
+    // Use strippedPath (token prefix removed) for all routing below
+    const routePath = strippedPath;
+
     // DoH endpoint
-    if (path === `/${currentDohPath}` && !isBrowserDirect) {
+    if (routePath === `/${currentDohPath}` && !isBrowserDirect) {
       return handleDohRequest(request, url, currentDoH);
     }
 
     // Custom DoH via path: /1.1.1.1/dns-query or /dns.google/dns-query
-    const pathParts = path.split('/').filter(Boolean);
+    const pathParts = routePath.split('/').filter(Boolean);
     if (!isBrowserDirect && pathParts.length > 1 && pathParts[pathParts.length - 1] === currentDohPath) {
-      let customDoh = path.substring(1, path.lastIndexOf(`/${currentDohPath}`));
+      let customDoh = routePath.substring(1, routePath.lastIndexOf(`/${currentDohPath}`));
       customDoh = customDoh.replace(RE_PROTOCOL_FIX, '://');
       return handleDohRequest(request, url, customDoh, currentDoH);
     }
 
     // IP geolocation proxy
-    if (path === '/ip-info') {
+    if (routePath === '/ip-info') {
       return handleIpInfo(request, env, url);
     }
 
@@ -460,8 +471,7 @@ function showToast(msg){
 
 async function queryIpGeoInfo(ip){
   try{
-    const url = \`./ip-info?ip=\${ip}\` + (secureToken ? \`&token=\${encodeURIComponent(secureToken)}\` : '');
-    const r=await fetch(url);
+    const r=await fetch('./ip-info?ip='+encodeURIComponent(ip));
     if(!r.ok)throw new Error(r.status);
     return r.json();
   }
@@ -561,7 +571,7 @@ document.getElementById('resolveForm').addEventListener('submit',async function(
   document.getElementById('errorContainer').style.display='none';
   document.getElementById('copyBtn').style.display='none';
   try{
-    const url = \`?doh=\${encodeURIComponent(doh)}&domain=\${encodeURIComponent(domain)}&type=all\` + (secureToken ? \`&token=\${encodeURIComponent(secureToken)}\` : '');
+    const url = '?doh='+encodeURIComponent(doh)+'&domain='+encodeURIComponent(domain)+'&type=all';
     const r=await fetch(url);
     if(!r.ok)throw new Error('HTTP '+r.status);
     const json=await r.json();
