@@ -295,11 +295,7 @@ h1 { background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background
 .clear-input-btn:hover { color: #f87171; background: rgba(255, 255, 255, 0.05); }
 .search-btn { background: linear-gradient(135deg, #38bdf8 0%, #3b82f6 100%); border: none; border-radius: 14px; padding: 0 30px; font-weight: 600; font-size: 1.05rem; color: #fff; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3); }
 .search-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(56, 189, 248, 0.4); background: linear-gradient(135deg, #7dd3fc 0%, #60a5fa 100%); }
-.settings-toggle { display: inline-flex; align-items: center; gap: 6px; color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; cursor: pointer; margin-top: 20px; transition: color 0.2s ease; background: none; border: none; }
-.settings-toggle:hover { color: #38bdf8; }
-.advanced-settings { display: none; max-width: 600px; margin: 20px auto 0; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; text-align: left; animation: slideDown 0.3s ease forwards; }
-.advanced-settings.show { display: block; }
-@keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+.doh-config { max-width: 600px; margin: 20px auto 0; text-align: left; }
 .form-label { font-weight: 500; margin-bottom: 8px; color: rgba(255, 255, 255, 0.7); font-size: 0.95rem; }
 .form-select, .form-control { background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff; border-radius: 12px; padding: 12px 16px; transition: all 0.3s ease; }
 .form-control:focus { background: rgba(0, 0, 0, 0.3); border-color: rgba(56, 189, 248, 0.5); box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.1); color: #fff; }
@@ -350,19 +346,12 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 .copy-link:hover { color: #7dd3fc; border-bottom: 1px solid #7dd3fc; }
 .copy-link:after { content: ''; position: absolute; top: 0; right: -65px; opacity: 0; white-space: nowrap; color: #38bdf8; font-size: 12px; transition: opacity 0.3s ease; }
 .copy-link.copied:after { content: '✓ 已复制'; opacity: 1; }
-.github-corner svg { fill: rgba(255, 255, 255, 0.1); color: #fff; position: absolute; top: 0; right: 0; border: 0; width: 80px; height: 80px; transition: fill 0.3s; }
-.github-corner:hover svg { fill: rgba(255, 255, 255, 0.2); }
-.github-corner:hover .octo-arm { animation: octocat-wave 560ms ease-in-out; }
-@keyframes octocat-wave { 0%, 100% { transform: rotate(0); } 20%, 60% { transform: rotate(-25deg); } 40%, 80% { transform: rotate(10deg); } }
-@media (max-width: 576px) { .container { padding: 20px; border-radius: 16px; } .github-corner:hover .octo-arm { animation: none; } .github-corner .octo-arm { animation: octocat-wave 560ms ease-in-out; } }
+
 .toast-msg { visibility: hidden; min-width: 200px; background-color: rgba(30, 41, 59, 0.9); backdrop-filter: blur(10px); color: #fff; text-align: center; border-radius: 8px; padding: 12px 24px; position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 15px; border: 1px solid rgba(56, 189, 248, 0.4); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4); transition: opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); opacity: 0; }
 .toast-msg.show { visibility: visible; bottom: 50px; opacity: 1; }
 </style>
 </head>
 <body>
-<a href="https://github.com/cmliu/CF-Workers-DoH" target="_blank" class="github-corner" aria-label="View source on Github">
-<svg viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin:130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg>
-</a>
 <div class="container">
   <div class="hero-section">
     <h1 class="mb-2">DNS 解析引擎</h1>
@@ -377,19 +366,9 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
         </div>
         <button type="submit" class="search-btn">开始解析</button>
       </div>
-      <button type="button" class="settings-toggle" id="toggleSettingsBtn">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-        高级设置
-      </button>
-
-      <div class="advanced-settings" id="advancedSettings">
-        <div class="mb-3">
-          <label for="customDoh" class="form-label">上游 DoH 地址配置 (HTTPS)</label>
-          <input type="text" id="customDoh" class="form-control" readonly>
-        </div>
-        <div class="d-flex justify-content-end">
-          <button type="button" class="btn btn-outline-primary" id="getJsonBtn">在新标签页中查看 JSON 数据</button>
-        </div>
+      <div class="doh-config">
+        <label for="customDoh" class="form-label" style="font-size: 0.85rem; padding-left: 5px;">当前使用的上游 DoH 地址配置 (HTTPS)</label>
+        <input type="text" id="customDoh" class="form-control" readonly style="color: rgba(255,255,255,0.5); border:none; background: rgba(0,0,0,0.1);">
       </div>
     </form>
   </div>
@@ -435,10 +414,7 @@ const BLOCKED_IPV4=['104.21.16.1','104.21.32.1','104.21.48.1','104.21.64.1','104
 const BLOCKED_IPV6=['2606:4700:3030::6815:1001','2606:4700:3030::6815:3001','2606:4700:3030::6815:7001','2606:4700:3030::6815:5001'];
 const isBlockedIP=ip=>BLOCKED_IPV4.includes(ip)||BLOCKED_IPV6.includes(ip);
 
-document.getElementById('toggleSettingsBtn').addEventListener('click', function() {
-  const panel = document.getElementById('advancedSettings');
-  panel.classList.toggle('show');
-});
+
 
 document.getElementById('clearBtn').addEventListener('click',()=>{const d=document.getElementById('domain');d.value='';d.focus()});
 
@@ -608,11 +584,7 @@ document.addEventListener('DOMContentLoaded',function(){
     });
   }
 
-  document.getElementById('getJsonBtn').addEventListener('click',function(){
-    const d=document.getElementById('customDoh').value;if(!d){alert('获取 DoH 地址失败');return}
-    const domain=document.getElementById('domain').value;if(!domain){alert('请输入需要解析的域名');return}
-    const u=new URL(d);u.searchParams.set('name',domain);window.open(u.toString(),'_blank');
-  });
+
 });
 </script>
 </body>
