@@ -13,6 +13,18 @@
 - **访问控制**：支持 Token 认证保护服务访问
 - **URL 重定向**：支持配置重定向 URL 或代理 URL
 
+### 已测试支持的 DoH 服务器
+
+| 服务器 | 供应商 | 国外 | 推荐 |
+|--------|------|------|------|
+| `cloudflare-dns.com` | Cloudflare | ✅ | ✅ |
+| `dns.google` | Google | ✅ | ✅ |
+| `doh.opendns.com` | OpenDNS (Cisco) | ✅ |   |
+| `dns.quad9.net` | Quad9 (IBM) | ✅ |   |
+| `dns.alidns.com` | Alibaba |   |   |
+| `doh.360.cn` | 360 |   |   |
+| `doh.pub` | DNSPod (Tencent) |   | ❌ |
+
 ## 部署方式
 
 ### 部署到Cloudflare Worker
