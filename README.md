@@ -1,4 +1,5 @@
 # Reserve DNS Worker
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F6821F?style=for-the-badge&logo=cloudflare&logoColor=white)     ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 
 一个基于 Cloudflare Workers 的 DNS-over-HTTPS (DoH) 代理服务，提供安全的 DNS 查询和 IP 地理位置查询功能。
 
@@ -29,6 +30,10 @@
 
 ### 部署到Cloudflare Worker
 
+### 一键部署
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Yuch3nE/dns-reverse-cf-worker)
+
+### 手动部署
 1. 登录Cloudflare
 2. 创建新的Worker
 3. 将代码复制到Worker中
@@ -87,7 +92,7 @@ https://your-worker.workers.dev/dns-query?token=your-secure-token
 
 ## 许可证
 
-MIT License
+![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ## 鸣谢
 [cmliu](https://github.com/cmliu/CF-Workers-DoH), [tina-hello](https://github.com/tina-hello/doh-cf-workers), [ip-api](https://ip-api.com/), [Cloudflare](https://www.cloudflare.com/), [Google Gemini](https://ai.google.dev/)
