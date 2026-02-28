@@ -61,8 +61,10 @@ export default {
       if (hasPathToken) {
         // Strip the token prefix from the path for downstream routing
         strippedPath = path.slice(tokenPrefix.length) || '/';
-        if (!hasCookie) {
-          // Set cookie so browser UI works without repeating the token in path
+        // Only redirect browser visits to set a cookie (so the UI works without token in URL).
+        // DoH clients (AdGuard Home, doggo, etc.) must NOT be redirected — they don't carry
+        // cookies and would hit a 401 on the stripped path.
+        if (!hasCookie && isBrowserDirect) {
           const redirectUrl = new URL(url);
           redirectUrl.pathname = strippedPath;
           return new Response(null, {
