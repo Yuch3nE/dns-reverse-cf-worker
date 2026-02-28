@@ -77,9 +77,7 @@ export default {
     const pathParts = path.split('/').filter(Boolean);
     if (!isBrowserDirect && pathParts.length > 1 && pathParts[pathParts.length - 1] === currentDohPath) {
       let customDoh = path.substring(1, path.lastIndexOf(`/${currentDohPath}`));
-      if (customDoh.includes(':/') && !customDoh.includes('://')) {
-        customDoh = customDoh.replace(':/', '://');
-      }
+      customDoh = customDoh.replace(RE_PROTOCOL_FIX, '://');
       return handleDohRequest(request, url, customDoh, currentDoH);
     }
 
@@ -191,7 +189,7 @@ async function handleWebDnsQuery(request, url, defaultDoH, defaultPath) {
       const parts = dohUrl.pathname.split('/').filter(Boolean);
       if (parts.length > 1 && parts[parts.length - 1] === defaultPath) {
         let custom = dohUrl.pathname.substring(1, dohUrl.pathname.lastIndexOf(`/${defaultPath}`));
-        if (custom.includes(':/') && !custom.includes('://')) custom = custom.replace(':/', '://');
+        custom = custom.replace(RE_PROTOCOL_FIX, '://');
         if (!custom.startsWith('http')) custom = `https://${custom}`;
         upstream = custom.endsWith('/dns-query') ? custom : custom + '/dns-query';
       }
