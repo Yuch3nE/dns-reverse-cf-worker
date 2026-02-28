@@ -1,3 +1,9 @@
+// ─── Precompiled Regexes (module-level, compiled once at V8 startup) ─────────
+const RE_EXTRACT_HOST = /:\/\/([^/]+)/;
+const RE_PROTOCOL_FIX = /:\/(?!\/)/;
+const RE_CLEAN_URL_LIST = /[\t|"'\r\n]+/g;
+const RE_MULTI_COMMA = /,+/g;
+
 export default {
   async fetch(request, env) {
     let currentDoH = 'cloudflare-dns.com';
@@ -5,7 +11,7 @@ export default {
 
     if (env.DOH) {
       currentDoH = env.DOH;
-      const match = currentDoH.match(/:\/\/([^/]+)/);
+      const match = currentDoH.match(RE_EXTRACT_HOST);
       if (match) currentDoH = match[1];
     }
     // Strict separation: PATH is for routing, TOKEN is for auth.
@@ -64,7 +70,7 @@ export default {
 
     // DoH endpoint
     if (path === `/${currentDohPath}` && !isBrowserDirect) {
-      return handleDohRequest(request, currentDoH);
+      return handleDohRequest(request, url, currentDoH);
     }
 
     // Custom DoH via path: /1.1.1.1/dns-query or /dns.google/dns-query
@@ -74,7 +80,7 @@ export default {
       if (customDoh.includes(':/') && !customDoh.includes('://')) {
         customDoh = customDoh.replace(':/', '://');
       }
-      return handleDohRequest(request, customDoh, currentDoH);
+      return handleDohRequest(request, url, customDoh, currentDoH);
     }
 
     // IP geolocation proxy
@@ -209,10 +215,9 @@ async function handleWebDnsQuery(request, url, defaultDoH, defaultPath) {
 }
 
 // ─── DoH Request Proxy ────────────────────────────────────────────
-async function handleDohRequest(request, targetDoh, defaultDoH) {
+async function handleDohRequest(request, url, targetDoh, defaultDoH) {
   const { method, headers, body } = request;
   const UA = headers.get('User-Agent') || 'DoH Client';
-  const url = new URL(request.url);
   const { searchParams } = url;
 
   if (!targetDoh) targetDoh = defaultDoH;
@@ -270,17 +275,26 @@ async function handleDohRequest(request, targetDoh, defaultDoH) {
 }
 
 // ─── HTML Page ─────────────────────────────────────────────────────
-function renderHtml(currentDoH, currentDohPath, secureToken) {
-  return `<!DOCTYPE html>
+// Precompiled at module load time — only the 3 placeholders are replaced per request.
+const HTML_TEMPLATE = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>DNS-over-HTTPS Resolver</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="icon" href="https://cf-assets.www.cloudflare.com/dzlvafdwdttg/6TaQ8Q7BDmdAFRoHpDCb82/8d9bc52a2ac5af100de3a9adcf99ffaa/security-shield-protection-2.svg" type="image/x-icon">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+:root {
+  --glass-blur: blur(40px) saturate(200%);
+  --border-subtle: rgba(255,255,255,0.08);
+  --border-top: rgba(255,255,255,0.15);
+  --bg-glass: rgba(0,0,0,0.15);
+}
 body { font-family: 'Inter', system-ui, -apple-system, sans-serif; min-height: 100vh; margin: 0; padding: 40px 20px; color: #fff; background-color: #050505; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; overflow-x: hidden; }
 .background-orbs { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; overflow: hidden; pointer-events: none; }
 .orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.6; animation: float 20s infinite ease-in-out alternate; }
@@ -288,11 +302,11 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; min-height: 1
 .orb-2 { width: 500px; height: 500px; background: #8b5cf6; bottom: -150px; right: -100px; animation-delay: -5s; animation-duration: 25s; }
 .orb-3 { width: 300px; height: 300px; background: #06b6d4; top: 40%; left: 60%; animation-delay: -10s; animation-duration: 22s; }
 @keyframes float { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(10%, 15%) scale(1.1); } 100% { transform: translate(-10%, -5%) scale(0.9); } }
-.container { position: relative; width: 100%; max-width: 850px; background: rgba(30,30,40, 0.45); border-radius: 28px; box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2), inset 1px 0 0 rgba(255,255,255,0.05); padding: 40px; backdrop-filter: blur(40px) saturate(200%); -webkit-backdrop-filter: blur(40px) saturate(200%); border: 1px solid rgba(255, 255, 255, 0.05); }
+.container { position: relative; width: 100%; max-width: 850px; background: rgba(30,30,40, 0.45); border-radius: 28px; box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2), inset 1px 0 0 rgba(255,255,255,0.05); padding: 40px; backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border: 1px solid rgba(255, 255, 255, 0.05); }
 h1 { background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; text-align: center; margin-bottom: 30px; font-size: 2.2rem; letter-spacing: -0.5px; }
 .hero-section { text-align: center; margin-bottom: 40px; }
 .hero-subtitle { color: rgba(255, 255, 255, 0.6); font-size: 1.1rem; margin-bottom: 30px; }
-.search-box { position: relative; max-width: 600px; margin: 0 auto; display: flex; background: rgba(0, 0, 0, 0.15); border: 1px solid rgba(255, 255, 255, 0.08); border-top-color: rgba(255,255,255,0.15); border-radius: 28px; padding: 6px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 2px 4px rgba(0,0,0,0.2); transition: all 0.3s ease; backdrop-filter: blur(15px); }
+.search-box { position: relative; max-width: 600px; margin: 0 auto; display: flex; background: var(--bg-glass); border: 1px solid var(--border-subtle); border-top-color: var(--border-top); border-radius: 28px; padding: 6px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 2px 4px rgba(0,0,0,0.2); transition: all 0.3s ease; backdrop-filter: blur(15px); }
 .search-box:focus-within { border-color: rgba(255, 255, 255, 0.3); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(0,0,0,0.3); background: rgba(0, 0, 0, 0.25); }
 .search-input { flex-grow: 1; background: transparent; border: none; color: #fff; font-size: 1.1rem; padding: 12px 20px; outline: none; }
 .search-input::placeholder { color: rgba(255, 255, 255, 0.3); }
@@ -303,7 +317,7 @@ h1 { background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background
 .search-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); background: rgba(255, 255, 255, 0.15); border-color: rgba(255,255,255,0.25); }
 .doh-config { max-width: 600px; margin: 20px auto 0; text-align: left; }
 .form-label { font-weight: 500; margin-bottom: 8px; color: rgba(255, 255, 255, 0.5); font-size: 0.85rem; padding-left: 10px; }
-.form-select, .form-control { background: rgba(0, 0, 0, 0.15); border: 1px solid rgba(255, 255, 255, 0.08); border-top-color: rgba(255,255,255,0.15); color: #fff; border-radius: 24px; padding: 12px 20px; transition: all 0.3s ease; backdrop-filter: blur(15px); box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+.form-select, .form-control { background: var(--bg-glass); border: 1px solid var(--border-subtle); border-top-color: var(--border-top); color: #fff; border-radius: 24px; padding: 12px 20px; transition: all 0.3s ease; backdrop-filter: blur(15px); box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
 .form-control:focus { background: rgba(0, 0, 0, 0.25); border-color: rgba(255, 255, 255, 0.3); box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); color: #fff; outline: none; }
 .form-control::placeholder { color: rgba(255, 255, 255, 0.3); }
 .form-control:read-only { background: rgba(0, 0, 0, 0.1); color: rgba(255, 255, 255, 0.4); border-color: rgba(255, 255, 255, 0.05); }
@@ -323,8 +337,8 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 .nav-tabs .nav-link:hover { color: rgba(255, 255, 255, 0.9); }
 .nav-tabs .nav-link.active { background: rgba(255, 255, 255, 0.15); color: #fff; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.2); text-shadow: none; backdrop-filter: blur(8px); }
 .tab-content { background: transparent; border: none; padding: 0; position: relative; z-index: 1; }
-.result-summary { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-top-color: rgba(255,255,255,0.15); padding: 18px 24px; border-radius: 20px; color: #fff; margin-bottom: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); backdrop-filter: blur(20px); }
-.ip-record { padding: 16px 24px; margin-bottom: 14px; border-radius: 20px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); border-top-color: rgba(255,255,255,0.15); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.1); backdrop-filter: blur(12px); }
+.result-summary { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-top-color: var(--border-top); padding: 18px 24px; border-radius: 20px; color: #fff; margin-bottom: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); backdrop-filter: blur(20px); }
+.ip-record { padding: 16px 24px; margin-bottom: 14px; border-radius: 20px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-subtle); border-top-color: var(--border-top); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.1); backdrop-filter: blur(12px); }
 .ip-record:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.2); }
 .ip-address { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-weight: 600; min-width: 130px; color: #f8fafc; cursor: pointer; position: relative; transition: all 0.2s ease; display: inline-block; font-size: 15px; letter-spacing: 0.5px; }
 .ip-address:hover { color: #7dd3fc; text-shadow: 0 0 8px rgba(125, 211, 252, 0.4); }
@@ -351,7 +365,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 .copy-link:after { content: ''; position: absolute; top: 0; right: -65px; opacity: 0; white-space: nowrap; color: #38bdf8; font-size: 12px; transition: opacity 0.3s ease; }
 .copy-link.copied:after { content: '✓ 已复制'; opacity: 1; }
 
-.toast-msg { visibility: hidden; min-width: 200px; background: rgba(30,30,40, 0.45); backdrop-filter: blur(40px) saturate(200%); -webkit-backdrop-filter: blur(40px) saturate(200%); color: #fff; text-align: center; border-radius: 24px; padding: 12px 30px; position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 14px; border: 1px solid rgba(255, 255, 255, 0.1); border-top-color: rgba(255,255,255,0.2); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.1); transition: opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); opacity: 0; pointer-events: none; font-weight: 500; }
+.toast-msg { visibility: hidden; min-width: 200px; background: rgba(30,30,40, 0.45); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); color: #fff; text-align: center; border-radius: 24px; padding: 12px 30px; position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 14px; border: 1px solid rgba(255, 255, 255, 0.1); border-top-color: rgba(255,255,255,0.2); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.1); transition: opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); opacity: 0; pointer-events: none; font-weight: 500; }
 .toast-msg.show { visibility: visible; bottom: 60px; opacity: 1; }
 </style>
 </head>
@@ -360,7 +374,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 <div class="container">
   <div class="hero-section">
     <h1 class="mb-2">DNS 反向解析</h1>
-    <div class="hero-subtitle">基于 Cloudflare 安全网络的 DoH 查询</div>
+    <div class="hero-subtitle">基于 Cloudflare Worker 的 DoH 反向解析服务</div>
     <form id="resolveForm">
       <div class="search-box">
         <div class="input-wrapper">
@@ -401,16 +415,16 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 <div id="errorContainer" style="display:none;"><pre id="errorMessage" class="error-message"></pre></div>
 </div>
 <div class="beian-info">
-<p><strong>DNS-over-HTTPS：<span id="dohUrlDisplay" class="copy-link" title="点击复制">https://${currentDoH}/${currentDohPath}</span></strong><br>基于 Cloudflare Workers 上游 <span id="upstreamDomainDisplay">${currentDoH}</span> 的 DoH (DNS over HTTPS) 解析服务</p>
+<p><strong>DNS-over-HTTPS：<span id="dohUrlDisplay" class="copy-link" title="点击复制">https://__DOH__/__PATH__</span></strong><br>基于 Cloudflare Workers 的 DoH (DNS over HTTPS) 反向解析服务<span id="upstreamDomainDisplay">__DOH__</span></p>
 </div>
 </div>
 <div id="toast" class="toast-msg"></div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
 const currentHost=location.host,currentProtocol=location.protocol;
-const currentDohPath=${JSON.stringify(currentDohPath)};
-const currentDoH=${JSON.stringify(currentDoH)};
-const secureToken=${JSON.stringify(secureToken)};
+const currentDohPath=__PATH_JSON__;
+const currentDoH=__DOH_JSON__;
+const secureToken=__TOKEN_JSON__;
 const currentDohUrl=currentProtocol+'//'+currentHost+'/'+currentDohPath;
 const defaultDnsDoh='https://' + currentDoH + '/' + currentDohPath;
 let activeDohUrl=currentDohUrl;
@@ -550,6 +564,15 @@ document.getElementById('resolveForm').addEventListener('submit',async function(
   finally{document.getElementById('loading').style.display='none'}
 });
 
+document.querySelectorAll('[data-bs-toggle="tab"]').forEach(btn=>{
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('show','active'));
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(b=>b.classList.remove('active'));
+    document.querySelector(this.dataset.bsTarget)?.classList.add('show','active');
+    this.classList.add('active');
+  });
+});
+
 document.addEventListener('DOMContentLoaded',function(){
   const pathname=location.pathname,customDohInput=document.getElementById('customDoh');
   let pathDoh='';
@@ -564,7 +587,7 @@ document.addEventListener('DOMContentLoaded',function(){
     }else{customDohInput.value=defaultDnsDoh;activeDohUrl=defaultDnsDoh}
   }else{customDohInput.value=defaultDnsDoh;activeDohUrl=defaultDnsDoh}
 
-  let displayPath='/'+currentDohPath,upstreamHost='${currentDoH}';
+  let displayPath='/'+currentDohPath,upstreamHost=currentDoH;
   if(activeDohUrl!==defaultDnsDoh){
     displayPath=pathname;
     if(!displayPath.endsWith('/'+currentDohPath))displayPath+=displayPath.endsWith('/')?'':'/'+currentDohPath+'';
@@ -594,6 +617,14 @@ document.addEventListener('DOMContentLoaded',function(){
 </script>
 </body>
 </html>`;
+
+function renderHtml(doh, path, token) {
+  return HTML_TEMPLATE
+    .replaceAll('__DOH__', doh)
+    .replaceAll('__PATH__', path)
+    .replace('__DOH_JSON__', JSON.stringify(doh))
+    .replace('__PATH_JSON__', JSON.stringify(path))
+    .replace('__TOKEN_JSON__', JSON.stringify(token));
 }
 
 // ─── URL Proxy ─────────────────────────────────────────────────────
@@ -619,7 +650,7 @@ async function proxyUrl(proxyTarget, targetUrl) {
 }
 
 function parseUrlList(content) {
-  let cleaned = content.replace(/[\t|"'\r\n]+/g, ',').replace(/,+/g, ',');
+  let cleaned = content.replace(RE_CLEAN_URL_LIST, ',').replace(RE_MULTI_COMMA, ',');
   if (cleaned.startsWith(',')) cleaned = cleaned.slice(1);
   if (cleaned.endsWith(',')) cleaned = cleaned.slice(0, -1);
   return cleaned.split(',');
