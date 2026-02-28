@@ -90,4 +90,4 @@ https://your-worker.workers.dev/dns-query?token=your-secure-token
 MIT License
 
 ## 鸣谢
-[cmliu](https://github.com/cmliu/CF-Workers-DoH), [tina-hello](https://github.com/tina-hello/doh-cf-workers)、[ip-api](https://ip-api.com/), [Cloudflare](https://www.cloudflare.com/), [Google Gemini](https://ai.google.dev/)
+[cmliu](https://github.com/cmliu/CF-Workers-DoH), [tina-hello](https://github.com/tina-hello/doh-cf-workers), [ip-api](https://ip-api.com/), [Cloudflare](https://www.cloudflare.com/), [Google Gemini](https://ai.google.dev/)
