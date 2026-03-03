@@ -108,7 +108,8 @@ https://your-worker.workers.dev/{token}/dns-query
 ```
 
 # 使用 doggo
-doggo @https://your-worker.workers.dev/dns-query www.google.com A
+``` bash
+doggo www.google.com A @https://your-worker.workers.dev/dns-query
 ```
 
 ## 🌍 支持的 DoH 服务器
