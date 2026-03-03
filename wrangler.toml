@@ -1,4 +1,4 @@
-name = "reverse-dns-worker"
+name = "dns-reverse-cf-worker"
 main = "worker.js"
 compatibility_date = "2026-02-28"
 
