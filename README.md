@@ -61,9 +61,9 @@ PATH = "dns-query"
 # 访问控制（可选）
 TOKEN = "your-secure-token-here"
 
-# 重定向或代理（可选，二选一）
+# 重定向配置（可选）
 URL302 = "https://example.com"
-# 或
+# 伪装URL配置（可选）
 URL = "nginx"
 ```
 
