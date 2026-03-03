@@ -6,7 +6,7 @@ const RE_MULTI_COMMA = /,+/g;
 
 export default {
   async fetch(request, env) {
-    let currentDoH = 'cloudflare-dns.com';
+    let currentDoH = 'doh.360.cn';
     let currentDohPath = 'dns-query';
 
     if (env.DOH) {
@@ -81,17 +81,31 @@ export default {
     // Use strippedPath (token prefix removed) for all routing below
     const routePath = strippedPath;
 
-    // DoH endpoint
-    if (routePath === `/${currentDohPath}` && !isBrowserDirect) {
-      return handleDohRequest(request, url, currentDoH);
+    // DoH endpoint: /dns-query
+    if (routePath === `/${currentDohPath}`) {
+      // Web UI query with domain parameter - use default DoH
+      if (url.searchParams.has('domain') || url.searchParams.has('name')) {
+        return handleWebDnsQuery(request, url, currentDoH, currentDohPath);
+      }
+      // Standard DoH clients
+      if (!isBrowserDirect) {
+        return handleDohRequest(request, url, currentDoH);
+      }
     }
 
     // Custom DoH via path: /1.1.1.1/dns-query or /dns.google/dns-query
     const pathParts = routePath.split('/').filter(Boolean);
-    if (!isBrowserDirect && pathParts.length > 1 && pathParts[pathParts.length - 1] === currentDohPath) {
+    if (pathParts.length > 1 && pathParts[pathParts.length - 1] === currentDohPath) {
       let customDoh = routePath.substring(1, routePath.lastIndexOf(`/${currentDohPath}`));
       customDoh = customDoh.replace(RE_PROTOCOL_FIX, '://');
-      return handleDohRequest(request, url, customDoh, currentDoH);
+      // Web UI query with domain parameter
+      if (url.searchParams.has('domain') || url.searchParams.has('name')) {
+        return handleWebDnsQuery(request, url, currentDoH, currentDohPath, customDoh);
+      }
+      // Standard DoH proxy
+      if (!isBrowserDirect) {
+        return handleDohRequest(request, url, customDoh, currentDoH);
+      }
     }
 
     // IP geolocation proxy
@@ -99,7 +113,7 @@ export default {
       return handleIpInfo(request, env, url);
     }
 
-    // DNS query via query params (web UI backend logic)
+    // DNS query via query params (web UI backend logic - legacy format)
     if (url.searchParams.has('doh')) {
       return handleWebDnsQuery(request, url, currentDoH, currentDohPath);
     }
@@ -194,27 +208,36 @@ function combineDnsResults(ipv4Result, ipv6Result, nsResult) {
 }
 
 // ─── Web UI DNS Query Handler ─────────────────────────────────────
-async function handleWebDnsQuery(request, url, defaultDoH, defaultPath) {
+async function handleWebDnsQuery(request, url, defaultDoH, defaultPath, customDohFromPath) {
   const JSON_HDR = { 'content-type': 'application/json;charset=UTF-8', 'Access-Control-Allow-Origin': '*' };
 
   const domain = url.searchParams.get('domain') || url.searchParams.get('name') || 'www.google.com';
-  const doh = url.searchParams.get('doh') || `https://${defaultDoH}/dns-query`;
   const type = url.searchParams.get('type') || 'all';
 
-  // Determine upstream DoH
-  let upstream = doh;
-  if (doh.includes(url.host)) {
-    upstream = `https://${defaultDoH}/dns-query`;
-    try {
-      const dohUrl = new URL(doh);
-      const parts = dohUrl.pathname.split('/').filter(Boolean);
-      if (parts.length > 1 && parts[parts.length - 1] === defaultPath) {
-        let custom = dohUrl.pathname.substring(1, dohUrl.pathname.lastIndexOf(`/${defaultPath}`));
-        custom = custom.replace(RE_PROTOCOL_FIX, '://');
-        if (!custom.startsWith('http')) custom = `https://${custom}`;
-        upstream = custom.endsWith('/dns-query') ? custom : custom + '/dns-query';
-      }
-    } catch { }
+  // Determine upstream DoH: priority is path > query param > default
+  let upstream;
+  if (customDohFromPath) {
+    // From path: /doh.360.cn/dns-query?domain=...
+    let base = customDohFromPath;
+    if (!base.startsWith('http')) base = 'https://' + base;
+    upstream = base.endsWith('/dns-query') ? base : base + '/dns-query';
+  } else {
+    const doh = url.searchParams.get('doh') || `https://${defaultDoH}/dns-query`;
+    upstream = doh;
+    // Handle self-referencing URLs
+    if (doh.includes(url.host)) {
+      upstream = `https://${defaultDoH}/dns-query`;
+      try {
+        const dohUrl = new URL(doh);
+        const parts = dohUrl.pathname.split('/').filter(Boolean);
+        if (parts.length > 1 && parts[parts.length - 1] === defaultPath) {
+          let custom = dohUrl.pathname.substring(1, dohUrl.pathname.lastIndexOf(`/${defaultPath}`));
+          custom = custom.replace(RE_PROTOCOL_FIX, '://');
+          if (!custom.startsWith('http')) custom = `https://${custom}`;
+          upstream = custom.endsWith('/dns-query') ? custom : custom + '/dns-query';
+        }
+      } catch { }
+    }
   }
 
   try {
@@ -229,7 +252,7 @@ async function handleWebDnsQuery(request, url, defaultDoH, defaultPath) {
     const result = await queryDns(upstream, domain, type);
     return new Response(JSON.stringify(result), { headers: JSON_HDR });
   } catch (err) {
-    return new Response(JSON.stringify({ error: `DNS查询失败: ${err.message}`, doh, domain }), { status: 500, headers: JSON_HDR });
+    return new Response(JSON.stringify({ error: `DNS查询失败: ${err.message}`, upstream, domain }), { status: 500, headers: JSON_HDR });
   }
 }
 
@@ -256,13 +279,7 @@ async function handleDohRequest(request, url, targetDoh, defaultDoH) {
     }
 
     let response;
-    if (method === 'GET' && searchParams.has('name')) {
-      const search = searchParams.has('type') ? url.search : url.search + '&type=A';
-      response = await fetch(currentDnsDoH + search, { headers: { 'Accept': 'application/dns-json', 'User-Agent': UA } });
-      if (!response.ok) {
-        response = await fetch(currentJsonDoH + search, { headers: { 'Accept': 'application/dns-json', 'User-Agent': UA } });
-      }
-    } else if (method === 'GET') {
+    if (method === 'GET') {
       response = await fetch(currentDnsDoH + url.search, { headers: { 'Accept': 'application/dns-message', 'User-Agent': UA } });
     } else if (method === 'POST') {
       response = await fetch(currentDnsDoH, {
@@ -573,7 +590,13 @@ document.getElementById('resolveForm').addEventListener('submit',async function(
   document.getElementById('errorContainer').style.display='none';
   document.getElementById('copyBtn').style.display='none';
   try{
-    const url = '?doh='+encodeURIComponent(doh)+'&domain='+encodeURIComponent(domain)+'&type=all';
+    // Build URL: /doh.360.cn/dns-query?domain=www.google.com&type=all
+    let dohPath = doh;
+    if (dohPath.startsWith('https://')) dohPath = dohPath.slice(8);
+    else if (dohPath.startsWith('http://')) dohPath = dohPath.slice(7);
+    if (dohPath.endsWith('/dns-query')) dohPath = dohPath.slice(0, -10);
+    if (dohPath.endsWith('/resolve')) dohPath = dohPath.slice(0, -8);
+    const url = '/' + dohPath + '/' + currentDohPath + '?domain=' + encodeURIComponent(domain) + '&type=all';
     const r=await fetch(url);
     if(!r.ok)throw new Error('HTTP '+r.status);
     const json=await r.json();
