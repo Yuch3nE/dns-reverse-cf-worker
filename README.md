@@ -71,11 +71,7 @@ URL = "nginx"
 
 ### Token认证
 在ENV中设置`TOKEN`变量，值为你的认证token。
-
-服务支持三种认证方式：
-1. **URL 参数**：`?token=your-token`
-2. **Cookie**：`auth_token=your-token`
-3. **Authorization Header**：`Bearer your-token` 或直接使用 token 值
+修改为兼容Adguard Home的认证方式，即URL中包含token。
 
 ### 认证流程
 
@@ -83,7 +79,7 @@ URL = "nginx"
 
 **请求示例：**
 ```
-https://your-worker.workers.dev/dns-query?token=your-secure-token
+https:///your-worker.workers.dev/{token}/dns-query
 ```
 
 > [!TIP]

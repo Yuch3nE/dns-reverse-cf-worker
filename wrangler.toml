@@ -7,7 +7,6 @@ compatibility_date = "2026-02-28"
 DOH = "cloudflare-dns.com"
 # PATH = "dns-query"
 
-# 重定向或代理配置（可选，二选一）
 # URL302 = "https://example.com"
 # URL = "nginx"
 
