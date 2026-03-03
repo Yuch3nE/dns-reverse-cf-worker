@@ -8,7 +8,7 @@
 
 ## 📸 界面预览
 
-![Web UI 界面](screenshots/屏幕截图%2026-03-03%20235935.png)
+![Web UI 界面](screenshots/screenshot-2026-03-03-235935.png)
 
 ## ✨ 功能特性
 
