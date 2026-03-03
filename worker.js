@@ -652,17 +652,14 @@ document.addEventListener('DOMContentLoaded',function(){
     }else{customDohInput.value=defaultDnsDoh;activeDohUrl=defaultDnsDoh}
   }else{customDohInput.value=defaultDnsDoh;activeDohUrl=defaultDnsDoh}
 
-  let displayPath='/'+currentDohPath,upstreamHost=currentDoH;
+  let displayPath='/'+currentDohPath;
   if(activeDohUrl!==defaultDnsDoh){
     displayPath=pathname;
     if(!displayPath.endsWith('/'+currentDohPath))displayPath+=displayPath.endsWith('/')?'':'/'+currentDohPath+'';
-    try{upstreamHost=new URL(activeDohUrl).host}catch{}
   }
   const workerFullUrl=currentProtocol+'//'+currentHost+displayPath;
   const dohUrlDisplay=document.getElementById('dohUrlDisplay');
   if(dohUrlDisplay)dohUrlDisplay.textContent=workerFullUrl;
-  const upstreamDisplay=document.getElementById('upstreamDomainDisplay');
-  if(upstreamDisplay)upstreamDisplay.textContent=upstreamHost;
 
   const lastDomain=localStorage.getItem('lastDomain');
   if(lastDomain)document.getElementById('domain').value=lastDomain;
