@@ -1,4 +1,4 @@
-// ─── Precompiled Regexes (module-level, compiled once at V8 startup) ─────────
+// ─── 预编译正则表达式（模块级别，V8 启动时编译一次）─────────────
 const RE_EXTRACT_HOST = /:\/\/([^/]+)/;
 const RE_PROTOCOL_FIX = /:\/(?!\/)/;
 const RE_CLEAN_URL_LIST = /[\t|"'\r\n]+/g;
@@ -6,15 +6,18 @@ const RE_MULTI_COMMA = /,+/g;
 
 export default {
   async fetch(request, env) {
+    // 默认 DoH 服务器配置
     let currentDoH = 'doh.360.cn';
     let currentDohPath = 'dns-query';
 
+    // 从环境变量读取 DoH 配置
     if (env.DOH) {
       currentDoH = env.DOH;
       const match = currentDoH.match(RE_EXTRACT_HOST);
       if (match) currentDoH = match[1];
     }
-    // Strict separation: PATH is for routing, TOKEN is for auth.
+
+    // PATH 用于路由，TOKEN 用于认证，严格分离
     currentDohPath = env.PATH || currentDohPath;
     if (currentDohPath.includes('/')) currentDohPath = currentDohPath.split('/')[1];
 
@@ -23,7 +26,7 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // OPTIONS preflight
+    // OPTIONS 预检请求处理
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
@@ -35,17 +38,18 @@ export default {
       });
     }
 
+    // 判断是否为浏览器直接访问（用于区分 DoH 客户端和 Web UI）
     const isBrowserDirect = request.method === 'GET' && !url.search && (request.headers.get('Accept') || '').includes('text/html');
 
-    // Global Strict Access Control (token as path segment: /{token}/...)
-    let strippedPath = path; // path after removing token prefix
+    // 全局严格访问控制（Token 作为路径段：/{token}/...）
+    let strippedPath = path;
     if (secureToken) {
       const cookieHeader = request.headers.get('Cookie') || '';
       const hasCookie = cookieHeader.includes(`auth_token=${secureToken}`);
       const authHeader = request.headers.get('Authorization') || '';
       const hasAuthHeader = authHeader === `Bearer ${secureToken}` || authHeader === secureToken;
 
-      // Check if path starts with /{token}
+      // 检查路径是否以 /{token} 开头
       const tokenPrefix = `/${secureToken}`;
       const hasPathToken = path === tokenPrefix || path.startsWith(tokenPrefix + '/');
 
@@ -59,11 +63,10 @@ export default {
       }
 
       if (hasPathToken) {
-        // Strip the token prefix from the path for downstream routing
+        // 从路径中移除 Token 前缀，用于后续路由
         strippedPath = path.slice(tokenPrefix.length) || '/';
-        // Only redirect browser visits to set a cookie (so the UI works without token in URL).
-        // DoH clients (AdGuard Home, doggo, etc.) must NOT be redirected — they don't carry
-        // cookies and would hit a 401 on the stripped path.
+        // 仅对浏览器访问设置 Cookie（使 UI 正常工作）
+        // DoH 客户端（AdGuard Home、doggo 等）不应重定向，它们不携带 Cookie
         if (!hasCookie && isBrowserDirect) {
           const redirectUrl = new URL(url);
           redirectUrl.pathname = strippedPath;
@@ -78,46 +81,47 @@ export default {
       }
     }
 
-    // Use strippedPath (token prefix removed) for all routing below
+    // 使用移除 Token 前缀后的路径进行路由
     const routePath = strippedPath;
 
-    // DoH endpoint: /dns-query
+    // DoH 端点：/dns-query
     if (routePath === `/${currentDohPath}`) {
-      // Web UI query with domain parameter - use default DoH
+      // Web UI 查询（带 domain 参数）- 使用默认 DoH
       if (url.searchParams.has('domain') || url.searchParams.has('name')) {
         return handleWebDnsQuery(request, url, currentDoH, currentDohPath);
       }
-      // Standard DoH clients
+      // 标准 DoH 客户端请求
       if (!isBrowserDirect) {
         return handleDohRequest(request, url, currentDoH);
       }
     }
 
-    // Custom DoH via path: /1.1.1.1/dns-query or /dns.google/dns-query
+    // 自定义 DoH 路径：/1.1.1.1/dns-query 或 /dns.google/dns-query
     const pathParts = routePath.split('/').filter(Boolean);
     if (pathParts.length > 1 && pathParts[pathParts.length - 1] === currentDohPath) {
       let customDoh = routePath.substring(1, routePath.lastIndexOf(`/${currentDohPath}`));
       customDoh = customDoh.replace(RE_PROTOCOL_FIX, '://');
-      // Web UI query with domain parameter
+      // Web UI 查询（带 domain 参数）
       if (url.searchParams.has('domain') || url.searchParams.has('name')) {
         return handleWebDnsQuery(request, url, currentDoH, currentDohPath, customDoh);
       }
-      // Standard DoH proxy
+      // 标准 DoH 代理
       if (!isBrowserDirect) {
         return handleDohRequest(request, url, customDoh, currentDoH);
       }
     }
 
-    // IP geolocation proxy
+    // IP 地理位置查询
     if (routePath === '/ip-info') {
       return handleIpInfo(request, env, url);
     }
 
-    // DNS query via query params (web UI backend logic - legacy format)
+    // DNS 查询（通过查询参数 - 旧格式兼容）
     if (url.searchParams.has('doh')) {
       return handleWebDnsQuery(request, url, currentDoH, currentDohPath);
     }
 
+    // 主页伪装配置
     if (env.URL302) return Response.redirect(env.URL302, 302);
     if (env.URL) {
       if (env.URL.toString().toLowerCase() === 'nginx') {
@@ -126,28 +130,31 @@ export default {
       return proxyUrl(env.URL, url);
     }
 
+    // 返回 Web UI 页面
     return new Response(renderHtml(currentDoH, currentDohPath, secureToken), { headers: { 'content-type': 'text/html;charset=UTF-8' } });
   }
 };
 
-// ─── IP Info Handler ───────────────────────────────────────────────
+// ─── IP 地理位置查询处理 ───────────────────────────────────────────────
 function handleIpInfo(request, env, url) {
   const CORS_JSON = { 'content-type': 'application/json;charset=UTF-8', 'Access-Control-Allow-Origin': '*' };
 
+  // 获取 IP 参数，默认使用客户端 IP
   const ip = url.searchParams.get('ip') || request.headers.get('CF-Connecting-IP');
   if (!ip) {
     return new Response(JSON.stringify({ status: 'error', message: 'IP参数未提供', code: 'MISSING_PARAMETER' }), { status: 400, headers: CORS_JSON });
   }
 
+  // 调用 ip-api.com 查询 IP 地理位置
   return fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`)
     .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
     .then(data => new Response(JSON.stringify(data), { headers: CORS_JSON }))
     .catch(err => new Response(JSON.stringify({ status: 'error', message: `IP查询失败: ${err.message}`, code: 'API_REQUEST_FAILED' }), { status: 500, headers: CORS_JSON }));
 }
 
-// ─── DNS Query (JSON API, /dns-query → /resolve fallback) ─────────
+// ─── DNS 查询（JSON API，支持 /dns-query 和 /resolve 回退）─────────────
 async function queryDns(dohServer, domain, type) {
-  // Strip any known suffix to get the base URL, then try both endpoints in order.
+  // 移除已知后缀，获取基础 URL
   let base = dohServer;
   if (base.endsWith('/dns-query')) base = base.slice(0, -10);
   else if (base.endsWith('/resolve')) base = base.slice(0, -8);
@@ -156,32 +163,34 @@ async function queryDns(dohServer, domain, type) {
   const params = `?name=${encodeURIComponent(domain)}&type=${type}`;
   const hdrs = { 'Accept': 'application/dns-json' };
 
-  // 1st attempt: /dns-query (Cloudflare, 360, etc.)
+  // 首次尝试：/dns-query（Cloudflare、360 等）
   let response = await fetch(`${base}/dns-query${params}`, { headers: hdrs });
 
-  // Fallback: /resolve (Google, etc.) when /dns-query is unavailable
+  // 回退：/resolve（Google 等）当 /dns-query 不可用时
   if (!response.ok) {
     const fallback = await fetch(`${base}/resolve${params}`, { headers: hdrs });
     if (fallback.ok) {
       response = fallback;
     } else {
-      // Both failed — report the first error (more informative for the primary endpoint)
+      // 两者都失败，报告第一个错误（主端点更具参考价值）
       const errText = await response.text();
-      throw new Error(`DoH error (${response.status}): ${errText.substring(0, 200)}`);
+      throw new Error(`DoH 错误 (${response.status}): ${errText.substring(0, 200)}`);
     }
   }
 
+  // 解析 JSON 响应
   const ct = response.headers.get('content-type') || '';
   if (ct.includes('json') || ct.includes('dns-json')) {
     return response.json();
   }
   const text = await response.text();
   try { return JSON.parse(text); }
-  catch { throw new Error(`Cannot parse response as JSON: ${text.substring(0, 100)}`); }
+  catch { throw new Error(`无法解析响应为 JSON: ${text.substring(0, 100)}`); }
 }
 
-// ─── Combine A/AAAA/NS Results ────────────────────────────────────
+// ─── 合并 A/AAAA/NS 查询结果 ────────────────────────────────────────────
 function combineDnsResults(ipv4Result, ipv6Result, nsResult) {
+  // 提取 NS 记录
   const nsRecords = [];
   if (nsResult.Answer) nsRecords.push(...nsResult.Answer.filter(r => r.type === 2));
   if (nsResult.Authority) {
@@ -189,6 +198,7 @@ function combineDnsResults(ipv4Result, ipv6Result, nsResult) {
     nsRecords.push(...authNs);
   }
 
+  // 合并所有问题
   const questions = [ipv4Result.Question, ipv6Result.Question, nsResult.Question]
     .filter(Boolean).flat();
 
@@ -207,24 +217,25 @@ function combineDnsResults(ipv4Result, ipv6Result, nsResult) {
   };
 }
 
-// ─── Web UI DNS Query Handler ─────────────────────────────────────
+// ─── Web UI DNS 查询处理 ─────────────────────────────────────────────
 async function handleWebDnsQuery(request, url, defaultDoH, defaultPath, customDohFromPath) {
   const JSON_HDR = { 'content-type': 'application/json;charset=UTF-8', 'Access-Control-Allow-Origin': '*' };
 
+  // 获取查询参数
   const domain = url.searchParams.get('domain') || url.searchParams.get('name') || 'www.google.com';
   const type = url.searchParams.get('type') || 'all';
 
-  // Determine upstream DoH: priority is path > query param > default
+  // 确定上游 DoH：优先级为 路径 > 查询参数 > 默认值
   let upstream;
   if (customDohFromPath) {
-    // From path: /doh.360.cn/dns-query?domain=...
+    // 从路径获取：/doh.360.cn/dns-query?domain=...
     let base = customDohFromPath;
     if (!base.startsWith('http')) base = 'https://' + base;
     upstream = base.endsWith('/dns-query') ? base : base + '/dns-query';
   } else {
     const doh = url.searchParams.get('doh') || `https://${defaultDoH}/dns-query`;
     upstream = doh;
-    // Handle self-referencing URLs
+    // 处理自引用 URL（防止循环）
     if (doh.includes(url.host)) {
       upstream = `https://${defaultDoH}/dns-query`;
       try {
@@ -241,6 +252,7 @@ async function handleWebDnsQuery(request, url, defaultDoH, defaultPath, customDo
   }
 
   try {
+    // type=all 时并行查询 A、AAAA、NS 记录
     if (type === 'all') {
       const [a, aaaa, ns] = await Promise.all([
         queryDns(upstream, domain, 'A'),
@@ -249,6 +261,7 @@ async function handleWebDnsQuery(request, url, defaultDoH, defaultPath, customDo
       ]);
       return new Response(JSON.stringify(combineDnsResults(a, aaaa, ns)), { headers: JSON_HDR });
     }
+    // 单类型查询
     const result = await queryDns(upstream, domain, type);
     return new Response(JSON.stringify(result), { headers: JSON_HDR });
   } catch (err) {
@@ -256,14 +269,15 @@ async function handleWebDnsQuery(request, url, defaultDoH, defaultPath, customDo
   }
 }
 
-// ─── DoH Request Proxy ────────────────────────────────────────────
+// ─── DoH 请求代理 ────────────────────────────────────────────────────────
 async function handleDohRequest(request, url, targetDoh, defaultDoH) {
   const { method, headers, body } = request;
   const UA = headers.get('User-Agent') || 'DoH Client';
   const { searchParams } = url;
 
   if (!targetDoh) targetDoh = defaultDoH;
-  // Normalize target DoH URL
+
+  // 规范化目标 DoH URL
   let baseDoh;
   if (targetDoh.startsWith('http://') || targetDoh.startsWith('https://')) {
     baseDoh = targetDoh.replace(/\/+$/, '');
@@ -274,14 +288,17 @@ async function handleDohRequest(request, url, targetDoh, defaultDoH) {
   const currentJsonDoH = baseDoh.endsWith('/dns-query') ? baseDoh.replace('/dns-query', '/resolve') : baseDoh + '/resolve';
 
   try {
+    // GET 请求必须带查询参数
     if (method === 'GET' && !url.search) {
       return new Response('Bad Request', { status: 400, headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
     }
 
     let response;
     if (method === 'GET') {
+      // GET 请求：转发 DNS wire format
       response = await fetch(currentDnsDoH + url.search, { headers: { 'Accept': 'application/dns-message', 'User-Agent': UA } });
     } else if (method === 'POST') {
+      // POST 请求：转发 DNS wire format body
       response = await fetch(currentDnsDoH, {
         method: 'POST',
         headers: { 'Accept': 'application/dns-message', 'Content-Type': 'application/dns-message', 'User-Agent': UA },
@@ -293,9 +310,10 @@ async function handleDohRequest(request, url, targetDoh, defaultDoH) {
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`DoH error (${response.status}): ${errText.substring(0, 200)}`);
+      throw new Error(`DoH 错误 (${response.status}): ${errText.substring(0, 200)}`);
     }
 
+    // 设置响应头
     const rHeaders = new Headers(response.headers);
     rHeaders.set('Access-Control-Allow-Origin', '*');
     if (method === 'GET' && searchParams.has('name')) {
@@ -304,14 +322,14 @@ async function handleDohRequest(request, url, targetDoh, defaultDoH) {
 
     return new Response(response.body, { status: response.status, headers: rHeaders });
   } catch (error) {
-    return new Response(JSON.stringify({ error: `DoH error: ${error.message}` }), {
+    return new Response(JSON.stringify({ error: `DoH 错误: ${error.message}` }), {
       status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
 }
 
-// ─── HTML Page ─────────────────────────────────────────────────────
-// Precompiled at module load time — only the 3 placeholders are replaced per request.
+// ─── HTML 页面渲染 ─────────────────────────────────────────────────────
+// 模块加载时预编译，每次请求仅替换 3 个占位符
 const HTML_TEMPLATE = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -331,7 +349,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   --border-top: rgba(255,255,255,0.15);
   --bg-glass: rgba(0,0,0,0.15);
 }
-body { font-family: 'Inter', system-ui, -apple-system, sans-serif; min-height: 100vh; margin: 0; padding: 40px 20px; color: #fff; background-color: #050505; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; overflow-x: hidden; }
+body { font-family: 'Inter', system-ui, -apple-system, sans-serif; min-height: 100vh; margin: 0; padding: 80px 20px; color: #fff; background-color: #050505; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; overflow-x: hidden; }
 .background-orbs { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; overflow: hidden; pointer-events: none; }
 .orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.6; animation: float 20s infinite ease-in-out alternate; }
 .orb-1 { width: 400px; height: 400px; background: #3b82f6; top: -100px; left: -100px; animation-delay: 0s; }
@@ -619,11 +637,6 @@ document.addEventListener('DOMContentLoaded',function(){
   let pathDoh='';
   if(pathname&&pathname!=='/'&&pathname!=='/'+currentDohPath){
     pathDoh=pathname.substring(1);
-    // Exclude token path: /{token} or /{token}/...
-    if(secureToken&&(pathDoh===secureToken||pathDoh.startsWith(secureToken+'/'))){
-      pathDoh=pathDoh.slice(secureToken.length);
-      if(pathDoh.startsWith('/'))pathDoh=pathDoh.slice(1);
-    }
     if(pathDoh.endsWith('/'+currentDohPath))pathDoh=pathDoh.substring(0,pathDoh.lastIndexOf('/'+currentDohPath));
     if(pathDoh){
       if(pathDoh.includes(':/')&&!pathDoh.includes('://'))pathDoh=pathDoh.replace(':/','://');
@@ -665,6 +678,7 @@ document.addEventListener('DOMContentLoaded',function(){
 </html>`;
 
 function renderHtml(doh, path, token) {
+  // 替换 HTML 模板中的占位符
   return HTML_TEMPLATE
     .replaceAll('__DOH__', doh)
     .replaceAll('__PATH__', path)
@@ -673,8 +687,9 @@ function renderHtml(doh, path, token) {
     .replace('__TOKEN_JSON__', JSON.stringify(token));
 }
 
-// ─── URL Proxy ─────────────────────────────────────────────────────
+// ─── URL 代理 ───────────────────────────────────────────────────────────
 async function proxyUrl(proxyTarget, targetUrl) {
+  // 从列表中随机选择一个 URL
   const urls = parseUrlList(proxyTarget);
   const fullUrl = urls[Math.floor(Math.random() * urls.length)];
   const parsed = new URL(fullUrl);
@@ -685,6 +700,7 @@ async function proxyUrl(proxyTarget, targetUrl) {
   pathname += targetUrl.pathname;
   const newUrl = `${protocol}://${hostname}${pathname}${parsed.search}`;
 
+  // 代理请求
   const response = await fetch(newUrl);
   const newResponse = new Response(response.body, {
     status: response.status,
@@ -695,6 +711,7 @@ async function proxyUrl(proxyTarget, targetUrl) {
   return newResponse;
 }
 
+// 解析 URL 列表（支持逗号分隔）
 function parseUrlList(content) {
   let cleaned = content.replace(RE_CLEAN_URL_LIST, ',').replace(RE_MULTI_COMMA, ',');
   if (cleaned.startsWith(',')) cleaned = cleaned.slice(1);
@@ -702,5 +719,5 @@ function parseUrlList(content) {
   return cleaned.split(',');
 }
 
-// ─── Nginx Fake Page ───────────────────────────────────────────────
+// ─── Nginx 伪装页面 ─────────────────────────────────────────────────────
 const NGINX_HTML = `<!DOCTYPE html><html><head><title>Welcome to nginx!</title><style>body{width:35em;margin:0 auto;font-family:Tahoma,Verdana,Arial,sans-serif}</style></head><body><h1>Welcome to nginx!</h1><p>If you see this page, the nginx web server is successfully installed and working. Further configuration is required.</p><p>For online documentation and support please refer to <a href="http://nginx.org/">nginx.org</a>.<br/>Commercial support is available at <a href="http://nginx.com/">nginx.com</a>.</p><p><em>Thank you for using nginx.</em></p></body></html>`;
