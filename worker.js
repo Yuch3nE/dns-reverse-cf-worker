@@ -45,7 +45,7 @@ export default {
     let strippedPath = path;
     if (secureToken) {
       const cookieHeader = request.headers.get('Cookie') || '';
-      const hasCookie = cookieHeader.includes(`auth_token=${secureToken}`);
+      const hasCookie = cookieHeader.split(';').some(c => c.trim() === `auth_token=${secureToken}`);
       const authHeader = request.headers.get('Authorization') || '';
       const hasAuthHeader = authHeader === `Bearer ${secureToken}` || authHeader === secureToken;
 
@@ -285,7 +285,6 @@ async function handleDohRequest(request, url, targetDoh, defaultDoH) {
     baseDoh = `https://${targetDoh}`;
   }
   const currentDnsDoH = baseDoh.endsWith('/dns-query') ? baseDoh : baseDoh + '/dns-query';
-  const currentJsonDoH = baseDoh.endsWith('/dns-query') ? baseDoh.replace('/dns-query', '/resolve') : baseDoh + '/resolve';
 
   try {
     // GET 请求必须带查询参数
