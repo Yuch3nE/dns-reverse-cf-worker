@@ -619,6 +619,11 @@ document.addEventListener('DOMContentLoaded',function(){
   let pathDoh='';
   if(pathname&&pathname!=='/'&&pathname!=='/'+currentDohPath){
     pathDoh=pathname.substring(1);
+    // Exclude token path: /{token} or /{token}/...
+    if(secureToken&&(pathDoh===secureToken||pathDoh.startsWith(secureToken+'/'))){
+      pathDoh=pathDoh.slice(secureToken.length);
+      if(pathDoh.startsWith('/'))pathDoh=pathDoh.slice(1);
+    }
     if(pathDoh.endsWith('/'+currentDohPath))pathDoh=pathDoh.substring(0,pathDoh.lastIndexOf('/'+currentDohPath));
     if(pathDoh){
       if(pathDoh.includes(':/')&&!pathDoh.includes('://'))pathDoh=pathDoh.replace(':/','://');
