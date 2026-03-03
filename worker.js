@@ -469,7 +469,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 <div id="errorContainer" style="display:none;"><pre id="errorMessage" class="error-message"></pre></div>
 </div>
 <div class="beian-info">
-<p><strong>DNS-over-HTTPS：<span id="dohUrlDisplay" class="copy-link" title="点击复制">https://__DOH__/__PATH__</span></strong><br>基于 Cloudflare Workers 的 DoH (DNS over HTTPS) 反向解析服务<span id="upstreamDomainDisplay">__DOH__</span></p>
+<p><strong>DNS-over-HTTPS：<span id="dohUrlDisplay" class="copy-link" title="点击复制">https://__DOH__/__PATH__</span></strong><br>基于 Cloudflare Workers 的 DoH (DNS over HTTPS) 反向解析服务</p>
 </div>
 </div>
 <div id="toast" class="toast-msg"></div>
@@ -637,8 +637,15 @@ document.addEventListener('DOMContentLoaded',function(){
   let pathDoh='';
   if(pathname&&pathname!=='/'&&pathname!=='/'+currentDohPath){
     pathDoh=pathname.substring(1);
+    // 排除 Token 路径：/{token} 或 /{token}/...
+    if(secureToken&&(pathDoh===secureToken||pathDoh.startsWith(secureToken+'/'))){
+      pathDoh=pathDoh.slice(secureToken.length);
+      if(pathDoh.startsWith('/'))pathDoh=pathDoh.slice(1);
+    }
+    // 移除末尾的 DoH 路径
     if(pathDoh.endsWith('/'+currentDohPath))pathDoh=pathDoh.substring(0,pathDoh.lastIndexOf('/'+currentDohPath));
-    if(pathDoh){
+    // 如果 pathDoh 为空或等于 currentDohPath，使用默认 DoH
+    if(pathDoh&&pathDoh!==currentDohPath){
       if(pathDoh.includes(':/')&&!pathDoh.includes('://'))pathDoh=pathDoh.replace(':/','://');
       let f=pathDoh;if(!f.startsWith('http'))f='https://'+f;if(f.endsWith('/'))f=f.slice(0,-1);
       if(!f.endsWith('/'+currentDohPath)&&!f.endsWith('/resolve'))f+='/'+currentDohPath;
@@ -684,7 +691,7 @@ function renderHtml(doh, path, token) {
     .replaceAll('__PATH__', path)
     .replace('__DOH_JSON__', JSON.stringify(doh))
     .replace('__PATH_JSON__', JSON.stringify(path))
-    .replace('__TOKEN_JSON__', JSON.stringify(token));
+    .replace('__TOKEN_JSON__', token ? JSON.stringify(token) : 'null');
 }
 
 // ─── URL 代理 ───────────────────────────────────────────────────────────

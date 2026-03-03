@@ -1,94 +1,170 @@
-# Reserve DNS Worker
-![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F6821F?style=for-the-badge&logo=cloudflare&logoColor=white)     ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+# DNS-over-HTTPS Worker
 
-一个基于 Cloudflare Workers 的 DNS-over-HTTPS (DoH) 代理服务，提供安全的 DNS 查询和 IP 地理位置查询功能。
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F6821F?style=for-the-badge&logo=cloudflare&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
 
-## 项目功能
+一个轻量级、高性能的 DNS-over-HTTPS (DoH) 代理服务，基于 Cloudflare Workers 构建。支持自定义上游 DNS 服务器、Token 认证、IP 地理位置查询等功能。
 
-### 核心功能
+## 📸 界面预览
 
-- **DoH 代理服务**：支持标准的 DNS-over-HTTPS 协议，兼容多种 DoH 服务器
-- **自定义 DoH 服务器**：支持通过路径指定不同的 DoH 服务器（如 `/1.1.1.1/dns-query` 或 `/dns.google/dns-query`）
-- **IP 地理位置查询**：提供 IP 地址的地理位置信息查询接口
-- **Web UI 界面**：提供美观的 Web 界面进行 DNS 查询
-- **访问控制**：支持 Token 认证保护服务访问
-- **URL 重定向**：支持配置重定向 URL 或代理 URL
+![Web UI 界面](screenshots/屏幕截图%2026-03-03%20235935.png)
 
-### 已测试支持的 DoH 服务器
+## ✨ 功能特性
 
-| 服务器 | 供应商 | 国外 | 推荐 |
-|--------|------|------|------|
-| `cloudflare-dns.com` | Cloudflare | ✅ | ✅ |
-| `dns.google` | Google | ✅ | ✅ |
-| `doh.opendns.com` | OpenDNS (Cisco) | ✅ |   |
-| `dns.quad9.net` | Quad9 (IBM) | ✅ |   |
-| `dns.alidns.com` | Alibaba |   |   |
-| `doh.360.cn` | 360 |   |   |
-| `doh.pub` | DNSPod (Tencent) |   | ❌ |
+| 特性 | 描述 |
+|------|------|
+| 🔐 **DoH 代理** | 标准 DNS-over-HTTPS 协议，支持 GET/POST 请求 |
+| 🔄 **自定义上游** | 通过 URL 路径动态切换 DoH 服务器 |
+| 🌐 **Web UI** | 支持多种记录类型查询 |
+| 🔑 **Token 认证** | 支持Token认证保护接口  |
+| 📍 **IP 查询** | IP 地理位置信息查询接口 |
+| 🎭 **主页伪装** | 支持重定向或伪装为 nginx 欢迎页 |
 
-## 部署方式
-
-### 部署到Cloudflare Worker
+## 🚀 快速部署
 
 ### 一键部署
+
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Yuch3nE/dns-reverse-cf-worker)
 
 ### 手动部署
-1. 登录Cloudflare
-2. 创建新的Worker
-3. 将代码复制到Worker中
-4. 配置环境变量
-5. 部署
 
-### 环境变量说明
+1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
+2. 进入 **Workers & Pages** → **Create Application** → **Create Worker**
+3. 将 [worker.js](worker.js) 代码粘贴到编辑器
+4. 配置环境变量（见下方说明）
+5. 点击 **Deploy** 部署
 
-| 变量名 | 类型 | 必填 | 默认值 | 说明 |
-|--------|------|------|--------|------|
-| `DOH` | String | 否 | `cloudflare-dns.com` | DoH 服务器地址，如 `cloudflare-dns.com`、`1.1.1.1`、`dns.google` |
-| `PATH` | String | 否 | `dns-query` | DoH 路径，如 `dns-query` |
-| `TOKEN` | String | 否 | 无 | 访问令牌，用于保护服务访问。设置后需要通过 URL 参数、Cookie 或 Authorization Header 进行认证 |
-| `URL302` | String | 否 | 无 | 重定向 URL，设置后所有请求将 302 重定向到该地址 |
-| `URL` | String | 否 | 无 | 伪装 URL，设置为 `nginx` 可显示 nginx 欢迎页面，否则伪装为指定 URL |
+## ⚙️ 配置说明
 
-### 环境变量配置示例
+### 环境变量
 
+| 变量名 | 必填 | 默认值 | 说明 |
+|--------|:----:|--------|------|
+| `DOH` | 否 | `cloudflare-dns.com` | 默认 DoH 服务器地址 |
+| `PATH` | 否 | `dns-query` | DoH 端点路径 |
+| `TOKEN` | 否 | - | 访问令牌，设置后启用认证保护 |
+| `URL302` | 否 | - | 重定向地址，设置后所有请求 302 跳转 |
+| `URL` | 否 | - | 伪装地址，设为 `nginx` 显示欢迎页 |
+
+### 配置示例
+
+**wrangler.toml**
 ```toml
+name = "dns-doh-worker"
+main = "worker.js"
+
 [vars]
-# DoH 服务器配置
 DOH = "cloudflare-dns.com"
 PATH = "dns-query"
-
-# 访问控制（可选）
-TOKEN = "your-secure-token-here"
-
-# 重定向配置（可选）
-URL302 = "https://example.com"
-# 伪装URL配置（可选）
-URL = "nginx"
+TOKEN = "your-secret-token"
 ```
 
-## 认证方式
+## 📖 使用指南
 
-### Token认证
-在ENV中设置`TOKEN`变量，值为你的认证token。
-修改为兼容Adguard Home的认证方式，即URL中包含token。
+### 基本用法
 
-### 认证流程
-
-当设置了 `TOKEN` 环境变量后，所有请求必须通过认证才能访问。未认证的请求将返回 401 错误。
-
-**请求示例：**
+**默认 DoH 端点**
 ```
-https:///your-worker.workers.dev/{token}/dns-query
+https://your-worker.workers.dev/dns-query
 ```
 
-> [!TIP]
-> 默认配置的DNS地址为`cloudflare-dns.com`
-> 支持在URL中指定不同的DoH服务器。
+**指定上游 DNS 服务器**
+```
+https://your-worker.workers.dev/dns.google/dns-query
+```
 
-## 许可证
+### Token 认证
 
-![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)
+设置 `TOKEN` 环境变量后，可通过以下方式认证：
 
-## 鸣谢
-[cmliu](https://github.com/cmliu/CF-Workers-DoH), [tina-hello](https://github.com/tina-hello/doh-cf-workers), [ip-api](https://ip-api.com/), [Cloudflare](https://www.cloudflare.com/), [Google Gemini](https://ai.google.dev/)
+| 方式 | 示例 |
+|------|------|
+| URL 路径 | `https://worker.dev/{token}/dns-query` |
+
+> 💡 **提示**: 浏览器访问带 Token 的 URL 会自动设置 Cookie，后续访问无需携带 Token。
+
+### Web UI 查询
+
+**使用默认 DoH**
+```
+https://your-worker.workers.dev/dns-query?domain=www.google.com&type=all
+```
+
+**使用自定义 DoH**
+```
+https://your-worker.workers.dev/dns.google/dns-query?domain=www.google.com&type=all
+```
+
+### 在AdGuard Home中配置
+
+```
+https://your-worker.workers.dev/dns-query
+```
+
+**带 Token 认证**
+```
+https://your-worker.workers.dev/{token}/dns-query
+```
+
+# 使用 doggo
+doggo @https://your-worker.workers.dev/dns-query www.google.com A
+```
+
+## 🌍 支持的 DoH 服务器
+
+| 服务器 | 供应商 | 区域 | 推荐 |
+|--------|--------|:----:|:----:|
+| `cloudflare-dns.com` | Cloudflare | 🌍 | ✅ |
+| `dns.google` | Google | 🌍 | ✅ |
+| `dns.quad9.net` | Quad9 (IBM) | 🌍 | |
+| `doh.opendns.com` | OpenDNS (Cisco) | 🌍 | |
+| `dns.alidns.com` | 阿里 DNS | 🇨🇳 | |
+| `doh.360.cn` | 360 DNS | 🇨🇳 | ✅ |
+| `doh.pub` | 腾讯 DNSPod | 🇨🇳 | ⚠️ |
+
+## 🔌 API 接口
+
+### DNS 查询
+
+**GET 请求**
+```
+GET /dns-query?domain=www.google.com&type=all
+```
+
+### IP 地理位置查询
+
+```
+GET /ip-info?ip=8.8.8.8
+```
+
+**响应示例**
+```json
+{
+  "status": "success",
+  "country": "美国",
+  "countryCode": "US",
+  "region": "VA",
+  "regionName": "弗吉尼亚州",
+  "city": "Ashburn",
+  "zip": "20149",
+  "lat": 39.03,
+  "lon": -77.5,
+  "timezone": "America/New_York",
+  "isp": "Google LLC",
+  "org": "Google Public DNS",
+  "as": "AS15169 Google LLC",
+  "query": "8.8.8.8"
+}
+```
+
+## 📄 许可证
+
+[MIT License](LICENSE)
+
+## 🙏 鸣谢
+
+- [cmliu/CF-Workers-DoH](https://github.com/cmliu/CF-Workers-DoH)
+- [tina-hello/doh-cf-workers](https://github.com/tina-hello/doh-cf-workers)
+- [ip-api.com](https://ip-api.com/)
+- [Cloudflare](https://www.cloudflare.com/)
